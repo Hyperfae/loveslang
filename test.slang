@@ -9,20 +9,12 @@ import love;
 
 uniform float freakyness;
 
-[Shader("vertex")]
-void mainVertex() {
-    love::VaryingTexCoord = love::vertex::VertexTexCoord;
-    love::VaryingColor = float4(1);
-    love::vertex::writePosition(mul(love::getProjectionMatrix(), love::vertex::VertexPosition));
-}
-
 [Shader("pixel")]
 void mainPixel() {
     float4 color = love::pixel::getMainTexture2D().Sample(love::pixel::readVertexTexCoord().xy);
     float4 freakycolor = color.zxyw;
     color = lerp(color, freakycolor, freakyness);
-    // love::pixel::writePixelColor(color);
-    love::pixel::writePixelColor(float4(0,1,0,1));
+    love::pixel::writePixelColor(color);
 }
 
 RWStructuredBuffer<uint> result;

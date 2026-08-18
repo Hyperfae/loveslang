@@ -25,7 +25,7 @@ while [ "$#" -gt 0 ]; do
         echo "#ifdef PIXEL"
         slangc -DVARYING=in -target glsl "$input" -entry "$entrypoint" \
             | applyCommonFixups \
-            | sed "s/void main()/void pixelmain()/"
+            | sed "s/void main()/void effect()/"
         echo "#endif"
     elif [[ "$1" = "COMPUTE="* ]]; then
         entrypoint="${1#"COMPUTE="}"

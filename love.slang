@@ -1,82 +1,33 @@
 namespace love {
-
     public float4 getConstantColor() {
-        return getUniformsPerDraw()[10];
-    }
-
-    public layout(location = 4) inout float4 VaryingTexCoord = float4(0);
-    public layout(location = 5) inout float4 VaryingColor = float4(0);
-
-    internal uniform float4[12] love_UniformsPerDraw;
-    [ForceInline]
-    internal float4[12] getUniformsPerDraw() {
-        __target_switch
-        {
-            case glsl:
-                __intrinsic_asm R"CODESTRING( love_UniformsPerDraw )CODESTRING";
-            default:
-                return love_UniformsPerDraw;
-        }
-    }
-
-    public float4x4 getTransformMatrix() {
-        return float4x4(getUniformsPerDraw()[0], getUniformsPerDraw()[1], getUniformsPerDraw()[2], getUniformsPerDraw()[3]);
-    }
-
-    public float4x4 getProjectionMatrix() {
-        return float4x4(getUniformsPerDraw()[4], getUniformsPerDraw()[5], getUniformsPerDraw()[6], getUniformsPerDraw()[7]);
-    }
-
-    [ForceInline]
-    public float4x4 getTransformProjectionMatrix() {
-        return mul(getTransformMatrix(), getProjectionMatrix());
+        return float4(1);
     }
 }
 
 namespace love::vertex {
 
-    struct VertexData<T = void> {
-        float4 VertexPosition;
-        float4 VertexTexCoord;
-        float4 VertexColor;
-        T attributes;
-    }
+    layout (location = 0) in float4 VertexPosition;
+    layout (location = 1) in float4 VertexTexCoord;
+    layout (location = 2) in float4 VertexColor;
 
-    struct VertexOutput<T = void> {
-        float4 ClipSpacePosition;
-        float4 VertexTexCoord;
-        float4 VertexColor;
-        T attributes;
-    }
-
-    public layout (location = 0) in float4 VertexPosition;
-    public layout (location = 1) in float4 VertexTexCoord;
-    public layout (location = 2) in float4 VertexColor;
-
-    [ForceInline]
-    public void writePosition(float4 position) {
-        __target_switch
-        {
-            case glsl:
-                __intrinsic_asm R"CODESTRING(love_Position = $0)CODESTRING";
-            // default:
-        }
-    }
+    out float4 VaryingTexCoord;
+    out float4 VaryingColor;
 }
 
 namespace love::pixel {
-    internal layout (location = 0) out float4 love_PixelColor;
+
+    internal out float4 love_PixelColor;
     internal uniform Sampler2D MainTex;
 
     [ForceInline]
     public void writePixelColor(float4 color) {
-        love_PixelColor = color;
-        // __target_switch
-        // {
-        //     case glsl:
-        //         __intrinsic_asm R"CODESTRING(love_PixelColor = $0)CODESTRING";
-        //     default:
-        // }
+        __target_switch
+        {
+            case glsl:
+                __intrinsic_asm R"CODESTRING(love_PixelColor = $0)CODESTRING";
+            default:
+                love_PixelColor = color;
+        }
     }
 
     [ForceInline]
@@ -90,9 +41,19 @@ namespace love::pixel {
         }
     }
 
+    internal in float4 VertexTexCoord;
     [ForceInline]
     public float4 readVertexTexCoord() {
-        return love::VaryingTexCoord;
+        __target_switch
+        {
+            case glsl:
+            {
+                __requirePrelude(R"CODESTRING(uniform sampler2D MainTex;)CODESTRING");
+                __intrinsic_asm R"CODESTRING( VaryingTexCoord )CODESTRING";
+            }
+            default:
+                return VertexTexCoord;
+        }
     }
 
     [ForceInline]
@@ -100,10 +61,7 @@ namespace love::pixel {
         __target_switch
         {
             case glsl:
-            {
-                __requirePrelude(R"CODESTRING(uniform sampler2D MainTex;)CODESTRING");
                 __intrinsic_asm R"CODESTRING( MainTex )CODESTRING";
-            }
             default:
                 return MainTex;
         }
