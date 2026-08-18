@@ -14,7 +14,7 @@ void mainPixel() {
     float4 color = love::pixel::getMainTexture2D().Sample(love::pixel::readVertexTexCoord().xy);
     float4 freakycolor = color.zxyw;
     color = lerp(color, freakycolor, freakyness);
-    love::pixel::writePixelColor(color);
+    love::pixel::writePixelColor(color, 0);
 }
 
 RWStructuredBuffer<uint> result;

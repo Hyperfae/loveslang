@@ -31,6 +31,16 @@ namespace love::pixel {
     }
 
     [ForceInline]
+    public void writePixelColor(float4 color, uint canvas_index) {
+        __target_switch
+        {
+            case glsl:
+                __intrinsic_asm R"CODESTRING(love_RenderTargets[$1] = $0)CODESTRING";
+            default:
+                love_PixelColor = color;
+        }
+    }
+    [ForceInline]
     public float4 readPixelColor() {
         __target_switch
         {

@@ -8,7 +8,19 @@ applyCommonFixups() {
     | grep -v "^#version ...$" \
     | grep -v "^layout(row_major) buffer;$" \
     | grep -v "^layout(binding = .)$" \
+    $(: "Convert globalparams block to default block struct" ) \
     | sed -z "s/layout(std140) uniform block_GlobalParams_0.*globalParams_0;/uniform GlobalParams_0 globalParams_0;/" \
+    $(: "Fixup RWStructuredBuffer names" ) \
+    $(: "This is kind of a nightmare regex, so it'll need some serious commentating." ) \
+    | sed -Ez "s/$(: \
+            Match the first line. \
+        )buffer (\w+) \{[\n\s]*$(: \
+            Match the type qualifier of the buffer. Sed does not support "\w" inside "[]" so we have to do this. \
+        ) +(\w+) +([a-zA-Z0-9_]+\[\]);$(: \
+            Match the ending \
+        )[\n\s]*\} (\w+);$(: \
+            Final output format \
+        )/buffer in_\4 { \2 \3; } \4;/" \
     | cat
 }
 
