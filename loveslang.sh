@@ -21,6 +21,8 @@ applyCommonFixups() {
         )[\n\s]*\} (\w+);$(: \
             Final output format \
         )/buffer in_\4 { \2 \3; } \4;/" \
+    $(: "Fixup images" ) \
+    | sed -E "s/([iu])[0-9]+image/\1image/" \
     | cat
 }
 
