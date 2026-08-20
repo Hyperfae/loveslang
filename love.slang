@@ -1,6 +1,31 @@
 namespace love {
     public float4 getConstantColor() {
-        return float4(1);
+        return getUniformPerDraw(10);
+    }
+
+    internal uniform float4[12] love_UniformsPerDraw;
+    [ForceInline]
+    internal float4 getUniformPerDraw(int index) {
+        __target_switch
+        {
+            case glsl:
+                __intrinsic_asm "love_UniformsPerDraw[$0]";
+            default:
+                return love_UniformsPerDraw[index];
+        }
+    }
+
+    public float4x4 getTransformMatrix() {
+        return transpose(float4x4(getUniformPerDraw(0), getUniformPerDraw(1), getUniformPerDraw(2), getUniformPerDraw(3)));
+    }
+
+    public float4x4 getProjectionMatrix() {
+        return transpose(float4x4(getUniformPerDraw(4), getUniformPerDraw(5), getUniformPerDraw(6), getUniformPerDraw(7)));
+    }
+
+    [ForceInline]
+    public float4x4 getTransformProjectionMatrix() {
+        return mul(getTransformMatrix(), getProjectionMatrix());
     }
 }
 
@@ -12,6 +37,77 @@ namespace love::vertex {
 
     out float4 VaryingTexCoord;
     out float4 VaryingColor;
+    out float4 love_Position : SV_Position;
+    [ForceInline]
+    public float4 readInputVertexPosition() {
+        __target_switch
+        {
+            case glsl:
+                __requirePrelude("layout (location = 0) in vec4 VertexPosition;");
+                __intrinsic_asm R"CODESTRING( VertexPosition )CODESTRING";
+            default:
+                return VertexPosition;
+        }
+    }
+    [ForceInline]
+    public float4 readInputVertexTexCoord() {
+        __target_switch
+        {
+            case glsl:
+                __requirePrelude("layout (location = 1) in vec4 VertexTexCoord;");
+                __intrinsic_asm R"CODESTRING( VertexTexCoord )CODESTRING";
+            default:
+                return VertexTexCoord;
+        }
+    }
+    [ForceInline]
+    public float4 readInputVertexColor() {
+        __target_switch
+        {
+            case glsl:
+                __requirePrelude("layout (location = 2) in vec4 VertexColor;");
+                __intrinsic_asm R"CODESTRING( VertexColor )CODESTRING";
+            default:
+                return VertexColor;
+        }
+    }
+    [ForceInline]
+    public void writeVertexPosition(float4 position) {
+        __target_switch
+        {
+            case glsl:
+                __intrinsic_asm R"CODESTRING(love_Position = $0)CODESTRING";
+            default:
+                love_Position = position;
+        }
+    }
+    [ForceInline]
+    public void writeVertexTexCoord(float4 color) {
+        __target_switch
+        {
+            case glsl:
+                __requirePrelude("out vec4 VaryingTexCoord;");
+                __intrinsic_asm R"CODESTRING(VaryingTexCoord = $0)CODESTRING";
+            default:
+                VaryingTexCoord = color;
+        }
+    }
+    [ForceInline]
+    public void writeVertexColor(float4 color) {
+        __target_switch
+        {
+            case glsl:
+                __requirePrelude("out vec4 VaryingColor;");
+                __intrinsic_asm R"CODESTRING(VaryingColor = $0)CODESTRING";
+            default:
+                VaryingColor = color;
+        }
+    }
+    public void lambda(IFunc<float4, float4x4, float4> func) {
+        writeVertexColor(readInputVertexColor());
+        writeVertexTexCoord(readInputVertexTexCoord());
+        writeVertexPosition(func(getTransformProjectionMatrix(), readInputVertexPosition()));
+    }
 }
 
 namespace love::pixel {
@@ -87,6 +183,20 @@ namespace love::pixel {
                 // TODO: Implement VideoTexel in Slang
                 return float4(0, 0, 0, 1);
         }
+    }
+
+    public float2 getPixelCoord() {
+        __target_switch
+        {
+            case glsl:
+                __intrinsic_asm R"CODESTRING( love_PixelCoord )CODESTRING";
+            default:
+                // TODO: Implement getPixelCoord in Slang
+                return float2(0, 0);
+        }
+    }
+    public void lambda(IFunc<float4, float4, Sampler2D, float2, float2> func) {
+        writePixelColor(func(float4(1), getMainTexture2D(), readVertexTexCoord().xy, getPixelCoord()));
     }
 }
 

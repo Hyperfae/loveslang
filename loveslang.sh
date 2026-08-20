@@ -2,6 +2,7 @@
 input="$1"
 set -euo pipefail
 shift
+loveslang_path="$(dirname "$(readlink -f $0)")"
 
 applyCommonFixups() {
     cat \
@@ -27,24 +28,25 @@ applyCommonFixups() {
 }
 
 while [ "$#" -gt 0 ]; do
+    echo "Building $input -- $1" > /dev/stderr
     if [[ "$1" = "VERTEX="* ]]; then
         entrypoint="${1#"VERTEX="}"
         echo "#ifdef VERTEX"
-        slangc -DVARYING=out -target glsl "$input" -entry "$entrypoint" \
+        slangc -I"$loveslang_path" -DVARYING=out -target glsl "$input" -entry "$entrypoint" \
             | applyCommonFixups \
             | sed "s/void main()/void vertexmain()/"
         echo "#endif"
     elif [[ "$1" = "PIXEL="* ]]; then
         entrypoint="${1#"PIXEL="}"
         echo "#ifdef PIXEL"
-        slangc -DVARYING=in -target glsl "$input" -entry "$entrypoint" \
+        slangc -I"$loveslang_path" -DVARYING=in -target glsl "$input" -entry "$entrypoint" \
             | applyCommonFixups \
             | sed "s/void main()/void effect()/"
         echo "#endif"
     elif [[ "$1" = "COMPUTE="* ]]; then
         entrypoint="${1#"COMPUTE="}"
         echo "#ifdef COMPUTE"
-        slangc -DVARYING=in -target glsl "$input" -entry "$entrypoint" \
+        slangc -I"$loveslang_path" -DVARYING=in -target glsl "$input" -entry "$entrypoint" \
             | applyCommonFixups \
             | sed "s/void main()/void computemain()/"
         echo "#endif"
