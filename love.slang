@@ -147,6 +147,23 @@ namespace love::pixel {
         }
     }
 
+    internal in float4 VertexColor;
+    [ForceInline]
+    public float4 readVertexColor() {
+        __target_switch
+        {
+            case glsl:
+            {
+                __requirePrelude(R"CODESTRING(uniform sampler2D MainTex;)CODESTRING");
+                __intrinsic_asm R"CODESTRING( VaryingColor )CODESTRING";
+            }
+            default:
+                return VertexColor;
+        }
+    }
+
+
+
     internal in float4 VertexTexCoord;
     [ForceInline]
     public float4 readVertexTexCoord() {
@@ -196,7 +213,7 @@ namespace love::pixel {
         }
     }
     public void lambda(IFunc<float4, float4, Sampler2D, float2, float2> func) {
-        writePixelColor(func(float4(1), getMainTexture2D(), readVertexTexCoord().xy, getPixelCoord()));
+        writePixelColor(func(readVertexColor(), getMainTexture2D(), readVertexTexCoord().xy, getPixelCoord()));
     }
 }
 
