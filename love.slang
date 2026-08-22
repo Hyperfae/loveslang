@@ -25,7 +25,7 @@ namespace love {
 
     [ForceInline]
     public float4x4 getTransformProjectionMatrix() {
-        return mul(getTransformMatrix(), getProjectionMatrix());
+        return mul(getProjectionMatrix(), getTransformMatrix());
     }
 }
 
@@ -103,6 +103,19 @@ namespace love::vertex {
                 VaryingColor = color;
         }
     }
+
+    internal in int love_InstanceID : SV_InstanceID;
+    [ForceInline]
+    public int getInstanceID() {
+        __target_switch
+        {
+            case glsl:
+                __intrinsic_asm "(love_InstanceID)";
+            default:
+                return love_InstanceID;
+        }
+    }
+
     public void lambda(IFunc<float4, float4x4, float4> func) {
         writeVertexColor(readInputVertexColor());
         writeVertexTexCoord(readInputVertexTexCoord());
