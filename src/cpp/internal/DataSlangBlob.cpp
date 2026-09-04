@@ -6,23 +6,17 @@
 namespace loveslang {
 
 DataSlangBlob::DataSlangBlob(love::Data* dataptr) {
-    data = dataptr;
-    data->retain();
+    object = dataptr;
+    object->retain();
 }
 
-// DataSlangBlob::~DataSlangBlob() {
-//     data->release();
-// }
 
 void const* DataSlangBlob::getBufferPointer() {
-    return data->getData();
+    return object->getData();
 }
 
 size_t DataSlangBlob::getBufferSize() {
-    return data->getSize();
+    return object->getSize();
 }
 
 };
-
-#define SlangObject DataSlangBlob
-#include "SlangObjectOld.ixx"

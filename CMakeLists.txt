@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 4.0.0)
 project(loveslang)
 add_subdirectory(src/libraries/love)
+set(CMAKE_CXX_STANDARD 26)
 
 file(GLOB internal_SRC
      "src/cpp/internal/*.hpp"
