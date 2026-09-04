@@ -9,6 +9,7 @@
 #include <ostream>
 #include <slang-com-ptr.h>
 #include <slang.h>
+#include <string_view>
 
 namespace loveslang
 {
@@ -21,7 +22,7 @@ static int w_compileToGLSL(lua_State* L)
 	if (status == SLANG_OK && blobptr.get() != nullptr) {
 		auto ptr = blobptr->getBufferPointer();
 		std::cout << "hi" << std::endl;
-		std::cout << (char *)(blobptr->getBufferPointer()) << std::endl;
+		std::cout << std::string_view((const char*)blobptr->getBufferPointer(), blobptr->getBufferSize()) << std::endl;
 		std::cout << "bye" << std::endl;
 	} else {
 		std::cout << "slangfail:" << status << std::endl;

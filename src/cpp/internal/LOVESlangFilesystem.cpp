@@ -17,7 +17,9 @@ SlangResult LOVESlangFilesystem::loadFile(char const* path, ISlangBlob** outBlob
     if (data == nullptr) {
         return SLANG_E_CANNOT_OPEN;
     }
-    *outBlob = (static_cast<ISlangBlob *>(new DataSlangBlob(data)));
+    auto datablob = new DataSlangBlob(data);
+    datablob->AddRef();
+    *outBlob = (static_cast<ISlangBlob *>(datablob));
     return SLANG_OK;
 }
 
@@ -25,4 +27,4 @@ SlangResult LOVESlangFilesystem::loadFile(char const* path, ISlangBlob** outBlob
 
 #define SlangObject LOVESlangFilesystem
 #define SlangObjectCastable
-#include "SlangObject.ixx"
+#include "SlangObjectOld.ixx"

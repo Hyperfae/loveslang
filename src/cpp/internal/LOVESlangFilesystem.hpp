@@ -1,6 +1,5 @@
 #include <slang-com-ptr.h>
 #include <slang.h>
-#include "SlangObject.hpp"
 #include "common/Object.h"
 
 namespace loveslang {

@@ -9,7 +9,7 @@ SlangResult SlangObject::queryInterface(SlangUUID const& uuid, void** outObject)
 }
 
 uint32_t SlangObject::addRef() {
-    retain();
+    this->love::Object::retain();
 }
 
 uint32_t SlangObject::release() {

@@ -8,7 +8,7 @@ namespace loveslang {
 class DataSlangBlob : public ISlangBlob, public love::Object {
 public:
     DataSlangBlob(love::Data* data);
-    virtual ~DataSlangBlob();
+    // virtual ~DataSlangBlob();
     void const* getBufferPointer() override;
     size_t getBufferSize() override;
     uint32_t release() override;
