@@ -13,7 +13,7 @@
 namespace loveslang
 {
 
-static int w_compileGLSL(lua_State* L)
+static int w_compileToGLSL(lua_State* L)
 {
 	auto a = new LOVESlangFilesystem();
 	Slang::ComPtr<ISlangBlob> blobptr;
@@ -31,7 +31,7 @@ static int w_compileGLSL(lua_State* L)
 
 static const luaL_Reg w_SlangSession_functions[] =
 {
-	{"compileGLSL", w_compileGLSL},
+	{"compileToGLSL", w_compileToGLSL},
 	{ 0, 0 }
 };
 extern "C" int luaopen_slangsession(lua_State *L)

@@ -11,7 +11,7 @@ local compiler = loveslang.newCompiler({
 })
 print(love.timer.getTime() .. " - after second compiler")
 
-local source, reflection = compiler:compileGLSL("test.slang")
+local source, reflection = compiler:compileToGLSL("test.slang")
 
 local shader = love.graphics.newShader(source)
 
