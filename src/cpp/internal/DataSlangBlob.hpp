@@ -1,3 +1,5 @@
+#pragma once
+
 #include "SlangObject.hpp"
 #include "common/Data.h"
 #include "common/Object.h"

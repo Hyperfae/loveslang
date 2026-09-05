@@ -1,5 +1,6 @@
 #include "SlangCompiler.hpp"
 #include "common/Exception.h"
+#include "LOVESlangFilesystem.hpp"
 #include "graphics/Shader.h"
 #include "graphics/ShaderStage.h"
 #include <array>
@@ -22,6 +23,7 @@ SlangCompiler::SlangCompiler() {
     slang::TargetDesc targetDesc[1]{};
     targetDesc[0].format = SLANG_GLSL;
     sessionDesc.targets = targetDesc;
+    sessionDesc.fileSystem = new LOVESlangFilesystem();
     sessionDesc.targetCount = 1;
     std::array<slang::PreprocessorMacroDesc, 1> preprocessorMacroDesc =
     {

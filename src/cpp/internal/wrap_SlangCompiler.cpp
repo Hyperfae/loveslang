@@ -1,8 +1,8 @@
+#include <lua.hpp>
 #include "wrap_SlangCompiler.hpp"
 #include "SlangCompiler.hpp"
 #include "LOVESlangFilesystem.hpp"
 #include "common/runtime.h"
-#include <cstddef>
 #include <iostream>
 #include <lauxlib.h>
 #include <lua.h>
@@ -17,8 +17,10 @@ namespace loveslang
 static int w_compileToGLSL(lua_State* L)
 {
 	auto a = new LOVESlangFilesystem();
+	auto compiler = love::luax_checktype<SlangCompiler>(L, 1);
+	std::string path = love::luax_checkstring(L, 2);
 	Slang::ComPtr<ISlangBlob> blobptr;
-	auto status = a->loadFile("main.lua", blobptr.writeRef());
+	auto status = a->loadFile(path.c_str(), blobptr.writeRef());
 	if (status == SLANG_OK && blobptr.get() != nullptr) {
 		auto ptr = blobptr->getBufferPointer();
 		std::cout << "hi" << std::endl;

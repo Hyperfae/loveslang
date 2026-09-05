@@ -18,7 +18,6 @@ SlangResult LOVESlangFilesystem::loadFile(char const* path, ISlangBlob** outBlob
         return SLANG_E_CANNOT_OPEN;
     }
     auto datablob = new DataSlangBlob(data);
-    datablob->addRef();
     *outBlob = (static_cast<ISlangBlob *>(datablob));
     return SLANG_OK;
 }

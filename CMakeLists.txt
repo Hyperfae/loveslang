@@ -23,7 +23,6 @@ target_link_libraries(loveslangc
     liblove
     slang
 )
-# target_link_libraries(lualoveslangc libloveslang)
 
 target_include_directories(loveslang_internal
     PRIVATE src/libraries/love/src src/libraries/love/src/modules

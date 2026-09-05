@@ -1,3 +1,5 @@
+#pragma once
+
 #include <slang-com-ptr.h>
 #include <slang.h>
 #include "SlangObject.hpp"
@@ -7,6 +9,7 @@ namespace loveslang {
 class LOVESlangFilesystem : public CastableSlangObject<ISlangFileSystem, love::Object> {
 public:
     LOVESlangFilesystem();
+    virtual ~LOVESlangFilesystem() {};
     SlangResult loadFile(char const* path, ISlangBlob** outBlob) override;
 };
 }
