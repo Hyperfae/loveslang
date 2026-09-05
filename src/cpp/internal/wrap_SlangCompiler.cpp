@@ -2,6 +2,8 @@
 #include "wrap_SlangCompiler.hpp"
 #include "SlangCompiler.hpp"
 #include "LOVESlangFilesystem.hpp"
+#include "common/Exception.h"
+#include "modules/filesystem/wrap_Filesystem.h"
 #include "common/runtime.h"
 #include <iostream>
 #include <lauxlib.h>
@@ -16,20 +18,19 @@ namespace loveslang
 
 static int w_compileToGLSL(lua_State* L)
 {
-	auto a = new LOVESlangFilesystem();
 	auto compiler = love::luax_checktype<SlangCompiler>(L, 1);
-	std::string path = love::luax_checkstring(L, 2);
+	std::string moduleName = love::luax_checkstring(L, 2);
 	Slang::ComPtr<ISlangBlob> blobptr;
-	auto status = a->loadFile(path.c_str(), blobptr.writeRef());
-	if (status == SLANG_OK && blobptr.get() != nullptr) {
-		auto ptr = blobptr->getBufferPointer();
-		std::cout << "hi" << std::endl;
-		std::cout << std::string_view((const char*)blobptr->getBufferPointer(), blobptr->getBufferSize()) << std::endl;
-		std::cout << "bye" << std::endl;
-	} else {
-		std::cout << "slangfail:" << status << std::endl;
+	
+	SlangCompilerOutput compiled;
+	try {
+		compiled = compiler->compileToGLSL(moduleName);
+	} catch (love::Exception e) {
+		lua_pushstring(L, e.what());
+		lua_error(L);
 	}
-	return 0;
+	love::luax_pushstring(L, compiled.glsl);
+	return 1;
 }
 
 static const luaL_Reg w_SlangSession_functions[] =

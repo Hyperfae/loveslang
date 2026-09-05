@@ -1,4 +1,5 @@
 #include "SlangCompiler.hpp"
+#include "DataSlangBlob.hpp"
 #include "common/Exception.h"
 #include "LOVESlangFilesystem.hpp"
 #include "graphics/Shader.h"
@@ -8,8 +9,10 @@
 #include <mutex>
 #include <slang-com-ptr.h>
 #include <slang.h>
+#include <sstream>
 #include <string>
 #include <string_view>
+#include <vector>
 namespace loveslang {
 
 love::Type SlangCompiler::type("loveslang.SlangCompiler", &Object::type);
@@ -31,12 +34,128 @@ SlangCompiler::SlangCompiler() {
     };
     sessionDesc.preprocessorMacros = preprocessorMacroDesc.data();
     sessionDesc.preprocessorMacroCount = preprocessorMacroDesc.size();
+    
+    std::vector<const char*> search_paths{ "__loveslang_lib_internal" };
+    sessionDesc.searchPaths = search_paths.data();
+    sessionDesc.searchPathCount = search_paths.size();
+
     globalSession->createSession(sessionDesc,
                                  session.writeRef());
 }
 
-std::string SlangCompiler::compileToGLSL(std::string_view path, std::string_view source) {
-    return "hello void main() yay";
+SlangCompilerOutput SlangCompiler::compileToGLSL(std::string_view moduleName) {
+    Slang::ComPtr<slang::IBlob> diagnosticsBlob;
+    Slang::ComPtr<slang::IModule> slangModule;
+    slangModule = session->loadModule(moduleName.data(), diagnosticsBlob.writeRef());
+    if (!slangModule) {
+        throw love::Exception("Slang compilation failure: %s", diagnosticsBlob != nullptr ? diagnosticsBlob->getBufferPointer() : "Unknown" );
+    }
+    return getCompilerOutputFromModule(slangModule);
+}
+
+static std::vector<Slang::ComPtr<slang::IEntryPoint>> getEntryPoints(Slang::ComPtr<slang::IModule> module) {
+    auto entrypoint_count = module->getDefinedEntryPointCount();
+    std::vector<Slang::ComPtr<slang::IEntryPoint>> entrypoints(love::graphics::ShaderStageType::SHADERSTAGE_MAX_ENUM);
+    // TODO: Find some way to infer these automatically
+    static std::array<const char *, 3> entrypointNames {
+        "pixelMain",
+        "vertexMain",
+        "computeMain"
+    };
+    
+    for (int i = 0; i < love::graphics::ShaderStageType::SHADERSTAGE_MAX_ENUM; i++) {
+        Slang::ComPtr<slang::IEntryPoint> entryPoint;
+        module->findEntryPointByName(entrypointNames[i], entryPoint.writeRef());
+        if (entryPoint) {
+            entrypoints[i] = entryPoint;
+        }
+    }
+    
+    return entrypoints;
+}
+
+static std::string postprocessStageCode(std::string_view code, love::graphics::ShaderStageType stage) {
+    static std::array<const char *, love::graphics::ShaderStageType::SHADERSTAGE_MAX_ENUM> targetEntrypointNames {
+        "effect",
+        "vertexmain",
+        "computemain"
+    };
+
+    return std::string(code);
+}
+
+static void assertSlangOK(SlangResult result, slang::IBlob* diagnosticsBlob) {
+    if (result == SLANG_OK) return;
+    if (!diagnosticsBlob)
+        throw love::Exception("Slang failure (%#08x): Unknown", result);
+    throw love::Exception("Slang failure (%#08x): %s", result, std::string_view((char*)diagnosticsBlob->getBufferPointer(), diagnosticsBlob->getBufferSize()));
+}
+
+std::string SlangCompiler::getRawStageCode(slang::IModule* slangModule, slang::IEntryPoint* entryPoint) {
+    // 5. Compose Modules + Entry Points
+    std::array<slang::IComponentType*, 2> componentTypes =
+        {
+            slangModule,
+            entryPoint
+        };
+
+    Slang::ComPtr<slang::IComponentType> composedProgram;
+    {
+        Slang::ComPtr<slang::IBlob> diagnosticsBlob;
+        SlangResult result = session->createCompositeComponentType(
+            componentTypes.data(),
+            componentTypes.size(),
+            composedProgram.writeRef(),
+            diagnosticsBlob.writeRef());
+        assertSlangOK(result, diagnosticsBlob);
+    }
+    Slang::ComPtr<slang::IComponentType> linkedProgram;
+    {
+        Slang::ComPtr<slang::IBlob> diagnosticsBlob;
+        SlangResult result = composedProgram->link(
+            linkedProgram.writeRef(),
+            diagnosticsBlob.writeRef());
+        assertSlangOK(result, diagnosticsBlob);
+    }
+    Slang::ComPtr<slang::IBlob> outCode;
+    {
+        Slang::ComPtr<slang::IBlob> diagnosticsBlob;
+        SlangResult result = linkedProgram->getEntryPointCode(
+            0,
+            0,
+            outCode.writeRef(),
+            diagnosticsBlob.writeRef());
+        assertSlangOK(result, diagnosticsBlob);
+    }
+    // Slang::ComPtr<slang::IBlob> outDiag;
+    // auto result = entrypoint->getTargetCode(0, outCode.writeRef(), outDiag.writeRef());
+    // if (result != SLANG_OK) {
+    //     throw love::Exception("Failed to retrieve target code (%#08x): %s", result, "Unknown");
+    // }
+    
+    return std::string((char*)outCode->getBufferPointer(), outCode->getBufferSize());
+    // return "";
+}
+
+SlangCompilerOutput SlangCompiler::getCompilerOutputFromModule(Slang::ComPtr<slang::IModule> module) {
+    auto entrypoinsByStage = getEntryPoints(module);
+    std::stringstream final_code{};
+    static std::array<const char *, love::graphics::ShaderStageType::SHADERSTAGE_MAX_ENUM> stageNames {
+        "PIXEL",
+        "VERTEX",
+        "COMPUTE"
+    };
+    for (int stage_id = 0; stage_id < love::graphics::ShaderStageType::SHADERSTAGE_MAX_ENUM; stage_id++) {
+        if (!entrypoinsByStage[stage_id])
+            continue;
+        auto stage = (love::graphics::ShaderStageType)stage_id;
+        final_code << "#ifdef " << stageNames[stage_id] << "\n";
+        final_code << postprocessStageCode(getRawStageCode(module, entrypoinsByStage[stage_id].get()), stage);
+        final_code << "\n#endif\n";
+    }
+    return {
+        .glsl = final_code.str(),
+    };
 }
 
 SlangCompiler::~SlangCompiler() {
