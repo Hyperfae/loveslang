@@ -7,6 +7,7 @@
 #include <array>
 #include <iostream>
 #include <mutex>
+#include <regex>
 #include <slang-com-ptr.h>
 #include <slang.h>
 #include <sstream>
@@ -58,8 +59,8 @@ static std::vector<Slang::ComPtr<slang::IEntryPoint>> getEntryPoints(Slang::ComP
     std::vector<Slang::ComPtr<slang::IEntryPoint>> entrypoints(love::graphics::ShaderStageType::SHADERSTAGE_MAX_ENUM);
     // TODO: Find some way to infer these automatically
     static std::array<const char *, 3> entrypointNames {
-        "pixelMain",
         "vertexMain",
+        "pixelMain",
         "computeMain"
     };
     
@@ -74,14 +75,20 @@ static std::vector<Slang::ComPtr<slang::IEntryPoint>> getEntryPoints(Slang::ComP
     return entrypoints;
 }
 
-static std::string postprocessStageCode(std::string_view code, love::graphics::ShaderStageType stage) {
+static std::string postprocessStageCode(std::string_view inCode, love::graphics::ShaderStageType stage) {
     static std::array<const char *, love::graphics::ShaderStageType::SHADERSTAGE_MAX_ENUM> targetEntrypointNames {
-        "effect",
         "vertexmain",
+        "effect",
         "computemain"
     };
+    
+    std::string code{inCode};
+    code = std::regex_replace(code, std::regex("^#version .*$", std::regex::multiline), std::string(""));
+    code = std::regex_replace(code, std::regex("^layout\\(column_major\\) buffer;$", std::regex::multiline), std::string(""));
+    code = std::regex_replace(code, std::regex("^layout\\(binding = .\\)$", std::regex::multiline), std::string(""));
+    code = std::regex_replace(code, std::regex("void main"), std::string("void ") + targetEntrypointNames[stage]);
 
-    return std::string(code);
+    return code;
 }
 
 static void assertSlangOK(SlangResult result, slang::IBlob* diagnosticsBlob) {
@@ -141,8 +148,8 @@ SlangCompilerOutput SlangCompiler::getCompilerOutputFromModule(Slang::ComPtr<sla
     auto entrypoinsByStage = getEntryPoints(module);
     std::stringstream final_code{};
     static std::array<const char *, love::graphics::ShaderStageType::SHADERSTAGE_MAX_ENUM> stageNames {
-        "PIXEL",
         "VERTEX",
+        "PIXEL",
         "COMPUTE"
     };
     for (int stage_id = 0; stage_id < love::graphics::ShaderStageType::SHADERSTAGE_MAX_ENUM; stage_id++) {
