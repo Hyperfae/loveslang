@@ -1,6 +1,5 @@
 import love;
 
-RWStructuredBuffer<int> intbuffer;
 [Shader("vertex")]
 void vertexMain() {
     love::vertex::lambda((float4x4 transformProjection, float4 localPos) => {

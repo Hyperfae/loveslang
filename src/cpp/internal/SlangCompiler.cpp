@@ -87,6 +87,8 @@ static std::string postprocessStageCode(std::string_view inCode, love::graphics:
     code = std::regex_replace(code, std::regex("^layout\\(column_major\\) buffer;$", std::regex::multiline), std::string(""));
     code = std::regex_replace(code, std::regex("^layout\\(binding = .\\)$", std::regex::multiline), std::string(""));
     code = std::regex_replace(code, std::regex("void main"), std::string("void ") + targetEntrypointNames[stage]);
+    // Fixup uniforms - currently required for LÖVE to accept our GLSL.
+    code = std::regex_replace(code, std::regex("layout\\(std140\\) uniform block_GlobalParams_0(.|\\n|\\r)*globalParams_0;"), "uniform GlobalParams_0 globalParams_0;");
 
     return code;
 }
