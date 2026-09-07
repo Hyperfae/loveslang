@@ -30,6 +30,8 @@ public:
     static void ensureGlobalSession();
     // Destroys the global session used by loveslang. Should only be called when you're 100% sure the program is about to end.
     static void destroyGlobalSession();
+protected:
+    virtual std::string postprocessStageCode(std::string_view inCode, love::graphics::ShaderStageType stage);
 private:
     std::string getRawStageCode(slang::IModule* slangModule, slang::IEntryPoint* entryPoint);
 

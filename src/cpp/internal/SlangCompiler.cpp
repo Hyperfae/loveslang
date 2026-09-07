@@ -77,7 +77,7 @@ static std::vector<Slang::ComPtr<slang::IEntryPoint>> getEntryPoints(Slang::ComP
     return entrypoints;
 }
 
-static std::string postprocessStageCode(std::string_view inCode, love::graphics::ShaderStageType stage) {
+std::string SlangCompiler::postprocessStageCode(std::string_view inCode, love::graphics::ShaderStageType stage) {
     static std::array<const char *, love::graphics::ShaderStageType::SHADERSTAGE_MAX_ENUM> targetEntrypointNames {
         "vertexmain",
         "effect",
