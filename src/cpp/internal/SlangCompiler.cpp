@@ -5,6 +5,7 @@
 #include "graphics/Shader.h"
 #include "graphics/ShaderStage.h"
 #include <array>
+#include <cstddef>
 #include <iostream>
 #include <mutex>
 #include <regex>
@@ -13,6 +14,7 @@
 #include <sstream>
 #include <string>
 #include <string_view>
+#include <sys/types.h>
 #include <vector>
 namespace loveslang {
 
@@ -141,6 +143,28 @@ std::string SlangCompiler::getRawStageCode(slang::IModule* slangModule, slang::I
     // if (result != SLANG_OK) {
     //     throw love::Exception("Failed to retrieve target code (%#08x): %s", result, "Unknown");
     // }
+    static u_char stag{0};
+
+    if (++stag == 3){
+        auto programLayout = linkedProgram->getLayout();
+        int count = programLayout->getParameterCount();
+        
+        std::stringstream thing;
+        for (int i = 0; i < count; i++) {
+            auto thisVarRefl = programLayout->getParameterByIndex(i);
+            thisVarRefl->getType()->getKind();
+            auto n = thisVarRefl->getBindingIndex();
+            auto noexport_attr = thisVarRefl->getVariable()->findUserAttributeByName(globalSession, "love_NoExport");
+            if (!noexport_attr) {
+                thing << std::format("{} is at {:#08x}", thisVarRefl->getName(), n) << "\n";
+            }
+        }
+
+        std::cout << thing.str() << std::endl;
+        
+        if (count > 2) {
+        }
+    }
     
     return std::string((char*)outCode->getBufferPointer(), outCode->getBufferSize());
     // return "";

@@ -12,9 +12,10 @@ jit.off()
     print(love.timer.getTime() .. " - after second compiler")
 
     local source, reflection = compiler:compileToGLSL("test")
-    print(source)
+    -- print(source)
     print(love.timer.getTime() .. " - after compilation")
 
+    love.graphics.newComputeShader(source)
     local shader = love.graphics.newShader(source)
 
     testcommon.drawshader(shader)

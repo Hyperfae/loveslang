@@ -1,8 +1,11 @@
+[__AttributeUsage(_AttributeTargets.Var)]
+internal struct love_NoExportAttribute {}
 namespace love {
     public float4 getConstantColor() {
         return getUniformPerDraw(10);
     }
 
+    [love::NoExport]
     internal uniform float4[12] love_UniformsPerDraw;
     [ForceInline]
     internal float4 getUniformPerDraw(int index) {
@@ -31,12 +34,18 @@ namespace love {
 
 namespace love::vertex {
 
+    [love::NoExport]
     layout (location = 0) in float4 VertexPosition;
+    [love::NoExport]
     layout (location = 1) in float4 VertexTexCoord;
+    [love::NoExport]
     layout (location = 2) in float4 VertexColor;
 
+    [love::NoExport]
     out float4 VaryingTexCoord;
+    [love::NoExport]
     out float4 VaryingColor;
+    [love::NoExport]
     out float4 love_Position : SV_Position;
     [ForceInline]
     public float4 readInputVertexPosition() {
@@ -116,6 +125,7 @@ namespace love::vertex {
         }
     }
 
+    [love::NoExport]
     internal in int love_InstanceID : SV_InstanceID;
     [ForceInline]
     public int getInstanceID() {
@@ -139,7 +149,9 @@ namespace love::vertex {
 
 namespace love::pixel {
 
+    [love::NoExport]
     internal out float4 love_PixelColor: SV_Target;
+    [love::NoExport]
     internal uniform Sampler2D MainTex;
 
     [ForceInline]
@@ -180,35 +192,37 @@ namespace love::pixel {
         }
     }
 
-    internal in float4 VertexColor;
+    [love::NoExport]
+    internal in float4 VaryingColor;
     [ForceInline]
     public float4 readVertexColor() {
         __target_switch
         {
             #ifdef LOVESLANG
             case glsl:
-                __requirePrelude(R"CODESTRING(uniform sampler2D MainTex;)CODESTRING");
+                // __requirePrelude(R"CODESTRING(in vec4 VaryingColor;)CODESTRING");
                 __intrinsic_asm R"CODESTRING( VaryingColor )CODESTRING";
             #endif
             default:
-                return VertexColor;
+                return VaryingColor;
         }
     }
 
 
 
-    internal in float4 VertexTexCoord;
+    [love::NoExport]
+    internal in float4 VaryingTexCoord;
     [ForceInline]
     public float4 readVertexTexCoord() {
         __target_switch
         {
             case glsl:
             #ifdef LOVESLANG
-                __requirePrelude(R"CODESTRING(uniform sampler2D MainTex;)CODESTRING");
+                // __requirePrelude(R"CODESTRING(in vec4 VaryingTexCoord;)CODESTRING");
                 __intrinsic_asm R"CODESTRING( VaryingTexCoord )CODESTRING";
             #endif
             default:
-                return VertexTexCoord;
+                return VaryingTexCoord;
         }
     }
 
@@ -218,6 +232,7 @@ namespace love::pixel {
         {
             case glsl:
             #ifdef LOVESLANG
+                __requirePrelude(R"CODESTRING(uniform sampler2D MainTex;)CODESTRING");
                 __intrinsic_asm R"CODESTRING( MainTex )CODESTRING";
             #endif
             default:
@@ -255,4 +270,5 @@ namespace love::pixel {
         writePixelColor(func(readVertexColor(), getMainTexture2D(), readVertexTexCoord().xy, getPixelCoord()));
     }
 }
+
 
