@@ -18,5 +18,14 @@ jit.off()
     love.graphics.newComputeShader(source)
     local shader = love.graphics.newShader(source)
 
-    testcommon.drawshader(shader)
+    print("")
+    for k, v in pairs(reflection) do
+        print(k .. ": " .. tostring(v))
+        if type(v) == "table" then
+            for vk, vv in pairs(v) do
+                print("-", vk, vv)
+            end
+        end
+    end
+    testcommon.drawshader(shader, reflection)
 -- end
