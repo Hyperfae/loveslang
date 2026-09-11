@@ -155,9 +155,17 @@ static std::vector<std::string_view> split_str_view(std::string_view view, std::
     return output;
 }
 
-static void parseBufferUniformLine(std::shared_ptr<SlangCompiler::UniformInfo>& info, std::vector<std::string_view>& lines, slang::VariableLayoutReflection* paramater, std::map<int, int>& binding_line_map) {
+static void parseResourceUniform(std::shared_ptr<UniformInfo>& info, std::vector<std::string_view>& lines, slang::VariableLayoutReflection* paramater, std::map<int, int>& binding_line_map)
+{
     int binding_index = paramater->getBindingIndex();
     int current_line = binding_line_map[binding_index];
+    if (paramater->getType()->getResourceShape() != SLANG_STRUCTURED_BUFFER) {
+        std::smatch sm0;
+        std::string line{lines[binding_line_map[binding_index] + 1]};
+        std::regex_search(line, sm0, std::regex(("uniform (.*) (.*);")));
+        info->glsl_names.push_back(sm0[2]);
+        return;
+    }
     switch (paramater->getType()->getResourceAccess()) {
     case SLANG_RESOURCE_ACCESS_CONSUME:
     case SLANG_RESOURCE_ACCESS_APPEND: {
@@ -179,8 +187,8 @@ static void parseBufferUniformLine(std::shared_ptr<SlangCompiler::UniformInfo>& 
     }
 }
 
-std::vector<SlangCompiler::UniformInfo> SlangCompiler::createUniformMap(StageInfo* stageinfo) {
-    std::map<std::string, std::shared_ptr<SlangCompiler::UniformInfo>> map{};
+std::vector<UniformInfo> SlangCompiler::createUniformMap(StageInfo* stageinfo) {
+    std::map<std::string, std::shared_ptr<UniformInfo>> map{};
     auto programLayout = stageinfo->linkedProgram->getLayout();
     int program_paramater_count = programLayout->getParameterCount();
     std::vector<std::string_view> split = split_str_view(std::string_view(stageinfo->glsl), std::string_view("\n"));
@@ -211,24 +219,24 @@ std::vector<SlangCompiler::UniformInfo> SlangCompiler::createUniformMap(StageInf
                 auto info = map[slangname];
                 uint bindingIndex = paramater->getBindingIndex();
                 if (line.contains(std::format("binding = {}", bindingIndex))) {
-                    std::cout << std::format("Found {} at {}", paramater->getName(), bindingIndex) << std::endl;
-                    switch (paramater->getType()->getResourceShape()) {
-                    case SLANG_STRUCTURED_BUFFER:
-                        parseBufferUniformLine(info, split, paramater, binding_line_map);
-                        break;
+                    std::cout << std::format("Found {} at {}, line {}", paramater->getName(), bindingIndex, i + 1) << std::endl;
+                    switch (paramater->getType()->getResourceShape())
+                    {
                     case SLANG_BYTE_ADDRESS_BUFFER:
                     case SLANG_RESOURCE_UNKNOWN:
                     case SLANG_ACCELERATION_STRUCTURE:
                     case SLANG_TEXTURE_SUBPASS:
                         break;
+                    case SLANG_STRUCTURED_BUFFER:
                     default:
+                        parseResourceUniform(info, split, paramater, binding_line_map);
                         break;
                     }
                 }
             }
         }
     }
-    std::vector<SlangCompiler::UniformInfo> list;
+    std::vector<UniformInfo> list;
     for (auto& item : map) {
         list.push_back(*item.second);
     }
@@ -236,6 +244,7 @@ std::vector<SlangCompiler::UniformInfo> SlangCompiler::createUniformMap(StageInf
 }
 
 SlangCompilerOutput SlangCompiler::getCompilerOutputFromModule(Slang::ComPtr<slang::IModule> module) {
+    std::bitset<love::graphics::ShaderStageType::SHADERSTAGE_MAX_ENUM> stages{};
     auto entrypoinsByStage = getEntryPoints(module);
     std::stringstream final_code{};
     static std::array<const char *, love::graphics::ShaderStageType::SHADERSTAGE_MAX_ENUM> stageNames {
@@ -247,6 +256,7 @@ SlangCompilerOutput SlangCompiler::getCompilerOutputFromModule(Slang::ComPtr<sla
     for (int stage_id = 0; stage_id < love::graphics::ShaderStageType::SHADERSTAGE_MAX_ENUM; stage_id++) {
         if (!entrypoinsByStage[stage_id])
             continue;
+        stages[stage_id] = true;
         auto stage = (love::graphics::ShaderStageType)stage_id;
         final_code << "#ifdef " << stageNames[stage_id] << "\n";
         auto stage_info = getRawStageCode(module, entrypoinsByStage[stage_id].get());
@@ -255,29 +265,36 @@ SlangCompilerOutput SlangCompiler::getCompilerOutputFromModule(Slang::ComPtr<sla
         final_code << postprocessStageCode(stage_info.glsl, stage);
         final_code << "\n#endif\n";
     }
+    auto uniformMap = std::make_shared<std::vector<UniformInfo>>();
     for (auto& stage : stageCodes) {
         auto linkedProgram = stage.linkedProgram;
         auto programLayout = linkedProgram->getLayout();
         
         std::stringstream thing;
-        auto uniformMap = createUniformMap(&stage);
+        auto stageUniformMap = createUniformMap(&stage);
         thing << "BEGIN THING FOR \"" << love::graphics::ShaderStage::getConstant(stage.stage) << "\"\n";
-        // int count = programLayout->getParameterCount();
-        int count = uniformMap.size();
+        int count = stageUniformMap.size();
         for (int i = 0; i < count; i++) {
-            // auto thisVarRefl = programLayout->getParameterByIndex(i);
-            // thisVarRefl->getType()->getKind();
-            // auto n = thisVarRefl->getBindingIndex();
-            // auto noexport_attr = thisVarRefl->getVariable()->findUserAttributeByName(globalSession, "love_NoExport");
-            // thing << std::format("- {} is at {:#08x}", thisVarRefl->getName(), n) << "\n";
-            thing << std::format("- {}: {}", uniformMap[i].slang_name, uniformMap[i].glsl_names) << "\n";
+            if (uniformMap->size() <= i) {
+                uniformMap->push_back(stageUniformMap[i]);
+            }
+            if (uniformMap->at(i).glsl_names.size() < stageUniformMap.at(i).glsl_names.size()) {
+                uniformMap->at(i).glsl_names = stageUniformMap.at(i).glsl_names;
+            }
+            thing << std::format("- {}: {}", stageUniformMap[i].slang_name, stageUniformMap[i].glsl_names) << "\n";
         }
 
         thing << "END THING\n";
         std::cout << thing.str() << std::endl;
     }
+    for (int i = 0; i < uniformMap->size(); i++) {
+        std::cout << std::format("- {}: {}", uniformMap->at(i).slang_name, uniformMap->at(i).glsl_names) << std::endl;
+    }
+        
     return {
         .glsl = final_code.str(),
+        .stages = stages,
+        .uniform_map = uniformMap,
     };
 }
 

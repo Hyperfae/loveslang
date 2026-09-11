@@ -4,14 +4,22 @@
 #include "graphics/ShaderStage.h"
 #include "slang.h"
 #include "slang-com-ptr.h"
+#include <memory>
 #include <mutex>
 #include <string>
 
 namespace loveslang {
 
+
+struct UniformInfo {
+    std::string slang_name;
+    std::vector<std::string> glsl_names;
+};
+
 struct SlangCompilerOutput {
     std::string glsl;
     std::bitset<love::graphics::ShaderStageType::SHADERSTAGE_MAX_ENUM> stages;
+    std::shared_ptr<std::vector<UniformInfo>> uniform_map;
 };
 
 class SlangCompiler : public love::Object
@@ -29,10 +37,6 @@ public:
     static void ensureGlobalSession();
     // Destroys the global session used by loveslang. Should only be called when you're 100% sure the program is about to end.
     static void destroyGlobalSession();
-    struct UniformInfo {
-        std::string slang_name;
-        std::vector<std::string> glsl_names;
-    };
 protected:
     virtual std::string postprocessStageCode(std::string_view inCode, love::graphics::ShaderStageType stage);
 private:
