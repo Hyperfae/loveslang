@@ -1,13 +1,12 @@
 #include "SlangCompiler.hpp"
-#include "DataSlangBlob.hpp"
 #include "common/Exception.h"
 #include "LOVESlangFilesystem.hpp"
-#include "graphics/Shader.h"
 #include "graphics/ShaderStage.h"
 #include <array>
-#include <cstddef>
 #include <iostream>
+#include <memory>
 #include <mutex>
+#include <ranges>
 #include <regex>
 #include <slang-com-ptr.h>
 #include <slang.h>
@@ -102,7 +101,8 @@ static void assertSlangOK(SlangResult result, slang::IBlob* diagnosticsBlob) {
     throw love::Exception("Slang failure (%#08x): %s", result, std::string_view((char*)diagnosticsBlob->getBufferPointer(), diagnosticsBlob->getBufferSize()));
 }
 
-std::string SlangCompiler::getRawStageCode(slang::IModule* slangModule, slang::IEntryPoint* entryPoint) {
+SlangCompiler::StageInfo SlangCompiler::getRawStageCode(slang::IModule* slangModule, slang::IEntryPoint* entryPoint)
+{
     // 5. Compose Modules + Entry Points
     std::array<slang::IComponentType*, 2> componentTypes =
         {
@@ -138,36 +138,101 @@ std::string SlangCompiler::getRawStageCode(slang::IModule* slangModule, slang::I
             diagnosticsBlob.writeRef());
         assertSlangOK(result, diagnosticsBlob);
     }
-    // Slang::ComPtr<slang::IBlob> outDiag;
-    // auto result = entrypoint->getTargetCode(0, outCode.writeRef(), outDiag.writeRef());
-    // if (result != SLANG_OK) {
-    //     throw love::Exception("Failed to retrieve target code (%#08x): %s", result, "Unknown");
-    // }
     static u_char stag{0};
+    
+    return {
+        std::string((char*)outCode->getBufferPointer(), outCode->getBufferSize()),
+        linkedProgram
+    };
+}
 
-    if (++stag == 3){
-        auto programLayout = linkedProgram->getLayout();
-        int count = programLayout->getParameterCount();
-        
-        std::stringstream thing;
-        for (int i = 0; i < count; i++) {
-            auto thisVarRefl = programLayout->getParameterByIndex(i);
-            thisVarRefl->getType()->getKind();
-            auto n = thisVarRefl->getBindingIndex();
-            auto noexport_attr = thisVarRefl->getVariable()->findUserAttributeByName(globalSession, "love_NoExport");
-            if (!noexport_attr) {
-                thing << std::format("{} is at {:#08x}", thisVarRefl->getName(), n) << "\n";
+static std::vector<std::string_view> split_str_view(std::string_view view, std::string_view delim) {
+    std::vector<std::string_view> output{};
+    auto split = std::views::split(view, delim);
+    for (auto line_raw : split) {
+        output.push_back(std::string_view(line_raw));
+    }
+    return output;
+}
+
+static void parseBufferUniformLine(std::shared_ptr<SlangCompiler::UniformInfo>& info, std::vector<std::string_view>& lines, slang::VariableLayoutReflection* paramater, std::map<int, int>& binding_line_map) {
+    int binding_index = paramater->getBindingIndex();
+    int current_line = binding_line_map[binding_index];
+    switch (paramater->getType()->getResourceAccess()) {
+    case SLANG_RESOURCE_ACCESS_CONSUME:
+    case SLANG_RESOURCE_ACCESS_APPEND: {
+        std::smatch sm0;
+        std::string line{lines[binding_line_map[binding_index + 1]]};
+        std::regex_search(line, sm0, std::regex(("buffer (.*) \\{")));
+        info->glsl_names.push_back(sm0[1]);
+        // TODO: Find counter buffer
+    }
+    case SLANG_RESOURCE_ACCESS_READ_WRITE: {
+        std::smatch sm1;
+        std::string line{lines[current_line]};
+        std::regex_search(line, sm1, std::regex(("buffer (.*) \\{")));
+        info->glsl_names.push_back(sm1[1]);
+        break;
+    }
+    default:
+        break;
+    }
+}
+
+std::vector<SlangCompiler::UniformInfo> SlangCompiler::createUniformMap(StageInfo* stageinfo) {
+    std::map<std::string, std::shared_ptr<SlangCompiler::UniformInfo>> map{};
+    auto programLayout = stageinfo->linkedProgram->getLayout();
+    int program_paramater_count = programLayout->getParameterCount();
+    std::vector<std::string_view> split = split_str_view(std::string_view(stageinfo->glsl), std::string_view("\n"));
+    std::map<int, int> binding_line_map{};
+    for (int i = 0; i < split.size(); i++) {
+        std::string_view line = split[i];
+        std::cout << std::format("{} - {}", i + 1, line) << std::endl;
+        if (!line.contains(std::string_view("binding ="))) {
+            continue;
+        } 
+        std::smatch sm1;
+        std::string linestring{line};
+        std::regex_search(linestring, sm1, std::regex(("binding = (\\d+)")));
+        binding_line_map.insert(std::pair(std::stoi(sm1[1]), i));
+    }
+    for (auto item : binding_line_map) {
+        auto line = split[item.second];
+        int i = item.second;
+        for (int j = 0; j < program_paramater_count; j++) {
+            slang::VariableLayoutReflection* paramater = programLayout->getParameterByIndex(j);
+            if (paramater->getType()->getKind() == slang::TypeReflection::Kind::Resource) {
+                auto slangname = std::string(paramater->getName());
+                if (!map.contains(slangname)) {
+                    std::shared_ptr<UniformInfo> info = std::make_shared<UniformInfo>();
+                    info->slang_name = slangname;
+                    map.insert({slangname, info});
+                }
+                auto info = map[slangname];
+                uint bindingIndex = paramater->getBindingIndex();
+                if (line.contains(std::format("binding = {}", bindingIndex))) {
+                    std::cout << std::format("Found {} at {}", paramater->getName(), bindingIndex) << std::endl;
+                    switch (paramater->getType()->getResourceShape()) {
+                    case SLANG_STRUCTURED_BUFFER:
+                        parseBufferUniformLine(info, split, paramater, binding_line_map);
+                        break;
+                    case SLANG_BYTE_ADDRESS_BUFFER:
+                    case SLANG_RESOURCE_UNKNOWN:
+                    case SLANG_ACCELERATION_STRUCTURE:
+                    case SLANG_TEXTURE_SUBPASS:
+                        break;
+                    default:
+                        break;
+                    }
+                }
             }
         }
-
-        std::cout << thing.str() << std::endl;
-        
-        if (count > 2) {
-        }
     }
-    
-    return std::string((char*)outCode->getBufferPointer(), outCode->getBufferSize());
-    // return "";
+    std::vector<SlangCompiler::UniformInfo> list;
+    for (auto& item : map) {
+        list.push_back(*item.second);
+    }
+    return list;
 }
 
 SlangCompilerOutput SlangCompiler::getCompilerOutputFromModule(Slang::ComPtr<slang::IModule> module) {
@@ -178,13 +243,38 @@ SlangCompilerOutput SlangCompiler::getCompilerOutputFromModule(Slang::ComPtr<sla
         "PIXEL",
         "COMPUTE"
     };
+    std::vector<SlangCompiler::StageInfo> stageCodes;
     for (int stage_id = 0; stage_id < love::graphics::ShaderStageType::SHADERSTAGE_MAX_ENUM; stage_id++) {
         if (!entrypoinsByStage[stage_id])
             continue;
         auto stage = (love::graphics::ShaderStageType)stage_id;
         final_code << "#ifdef " << stageNames[stage_id] << "\n";
-        final_code << postprocessStageCode(getRawStageCode(module, entrypoinsByStage[stage_id].get()), stage);
+        auto stage_info = getRawStageCode(module, entrypoinsByStage[stage_id].get());
+        stage_info.stage = stage;
+        stageCodes.push_back(stage_info);
+        final_code << postprocessStageCode(stage_info.glsl, stage);
         final_code << "\n#endif\n";
+    }
+    for (auto& stage : stageCodes) {
+        auto linkedProgram = stage.linkedProgram;
+        auto programLayout = linkedProgram->getLayout();
+        
+        std::stringstream thing;
+        auto uniformMap = createUniformMap(&stage);
+        thing << "BEGIN THING FOR \"" << love::graphics::ShaderStage::getConstant(stage.stage) << "\"\n";
+        // int count = programLayout->getParameterCount();
+        int count = uniformMap.size();
+        for (int i = 0; i < count; i++) {
+            // auto thisVarRefl = programLayout->getParameterByIndex(i);
+            // thisVarRefl->getType()->getKind();
+            // auto n = thisVarRefl->getBindingIndex();
+            // auto noexport_attr = thisVarRefl->getVariable()->findUserAttributeByName(globalSession, "love_NoExport");
+            // thing << std::format("- {} is at {:#08x}", thisVarRefl->getName(), n) << "\n";
+            thing << std::format("- {}: {}", uniformMap[i].slang_name, uniformMap[i].glsl_names) << "\n";
+        }
+
+        thing << "END THING\n";
+        std::cout << thing.str() << std::endl;
     }
     return {
         .glsl = final_code.str(),

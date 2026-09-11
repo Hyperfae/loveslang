@@ -1,6 +1,5 @@
 #pragma once
 
-#include "common/Data.h"
 #include "common/Object.h"
 #include "graphics/ShaderStage.h"
 #include "slang.h"
@@ -30,10 +29,20 @@ public:
     static void ensureGlobalSession();
     // Destroys the global session used by loveslang. Should only be called when you're 100% sure the program is about to end.
     static void destroyGlobalSession();
+    struct UniformInfo {
+        std::string slang_name;
+        std::vector<std::string> glsl_names;
+    };
 protected:
     virtual std::string postprocessStageCode(std::string_view inCode, love::graphics::ShaderStageType stage);
 private:
-    std::string getRawStageCode(slang::IModule* slangModule, slang::IEntryPoint* entryPoint);
+    struct StageInfo {
+        std::string glsl;
+        Slang::ComPtr<slang::IComponentType> linkedProgram;
+        love::graphics::ShaderStageType stage;
+    };
+    StageInfo getRawStageCode(slang::IModule* slangModule, slang::IEntryPoint* entryPoint);
+    std::vector<UniformInfo> createUniformMap(StageInfo* stageinfo);
 
     static Slang::ComPtr<slang::IGlobalSession> globalSession;
     static std::once_flag globalSessionCreated;
