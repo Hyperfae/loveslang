@@ -287,8 +287,11 @@ SlangCompilerOutput SlangCompiler::getCompilerOutputFromModule(Slang::ComPtr<sla
         thing << "END THING\n";
         std::cout << thing.str() << std::endl;
     }
-    for (int i = 0; i < uniformMap->size(); i++) {
-        std::cout << std::format("- {}: {}", uniformMap->at(i).slang_name, uniformMap->at(i).glsl_names) << std::endl;
+    for (int i = uniformMap->size() - 1; i >= 0; i--) {
+        if (uniformMap->at(i).glsl_names.size() == 0) {
+            uniformMap->erase(uniformMap->begin() + i);
+            continue;
+        }
     }
         
     return {
