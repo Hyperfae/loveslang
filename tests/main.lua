@@ -12,7 +12,6 @@ jit.off()
     print(love.timer.getTime() .. " - after second compiler")
 
     local source, reflection = compiler:compileToGLSL("test")
-    -- print(source)
     print(love.timer.getTime() .. " - after compilation")
 
     love.graphics.newComputeShader(source)
@@ -26,6 +25,9 @@ jit.off()
                 print("-", vk, vv)
             end
         end
+    end
+    if shader:hasUniform(reflection.ampl.name) then
+        shader:send(reflection.ampl.name, 0.5)
     end
     testcommon.drawshader(shader, reflection)
 -- end

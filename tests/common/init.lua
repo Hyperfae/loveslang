@@ -15,8 +15,8 @@ function testcommon.drawshader(shader, reflection)
     local time = 0.0
     function love.draw()
         love.graphics.setShader(shader)
-        if shader:hasUniform("globalParams_0.time_0") then
-            shader:send("globalParams_0.time_0", time)
+        if shader:hasUniform(reflection.time.name) then
+            shader:send(reflection.time.name, time)
         end
         local sw, sh = love.graphics.getDimensions()
         love.graphics.draw(canvas, 0, 0, 0, sw / canvas:getWidth(), sh / canvas:getHeight())

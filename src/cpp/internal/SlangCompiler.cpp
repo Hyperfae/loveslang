@@ -163,7 +163,9 @@ static void parseResourceUniform(std::shared_ptr<UniformInfo>& info, std::vector
         std::smatch sm0;
         std::string line{lines[binding_line_map[binding_index] + 1]};
         std::regex_search(line, sm0, std::regex(("uniform (.*) (.*);")));
-        info->glsl_names.push_back(sm0[2]);
+        if (sm0[2].length() > 0) {
+            info->glsl_names.push_back(sm0[2]);
+        }
         return;
     }
     switch (paramater->getType()->getResourceAccess()) {
@@ -172,14 +174,18 @@ static void parseResourceUniform(std::shared_ptr<UniformInfo>& info, std::vector
         std::smatch sm0;
         std::string line{lines[binding_line_map[binding_index + 1]]};
         std::regex_search(line, sm0, std::regex(("buffer (.*) \\{")));
-        info->glsl_names.push_back(sm0[1]);
+        if (sm0[1].length() > 0) {
+            info->glsl_names.push_back(sm0[1]);
+        }
         // TODO: Find counter buffer
     }
     case SLANG_RESOURCE_ACCESS_READ_WRITE: {
         std::smatch sm1;
         std::string line{lines[current_line]};
         std::regex_search(line, sm1, std::regex(("buffer (.*) \\{")));
-        info->glsl_names.push_back(sm1[1]);
+        if (sm1[1].length() > 0) {
+            info->glsl_names.push_back(sm1[1]);
+        }
         break;
     }
     default:
@@ -187,7 +193,8 @@ static void parseResourceUniform(std::shared_ptr<UniformInfo>& info, std::vector
     }
 }
 
-std::vector<UniformInfo> SlangCompiler::createUniformMap(StageInfo* stageinfo) {
+std::vector<UniformInfo> SlangCompiler::createUniformMap(StageInfo* stageinfo)
+{
     std::map<std::string, std::shared_ptr<UniformInfo>> map{};
     auto programLayout = stageinfo->linkedProgram->getLayout();
     int program_paramater_count = programLayout->getParameterCount();
@@ -204,40 +211,67 @@ std::vector<UniformInfo> SlangCompiler::createUniformMap(StageInfo* stageinfo) {
         std::regex_search(linestring, sm1, std::regex(("binding = (\\d+)")));
         binding_line_map.insert(std::pair(std::stoi(sm1[1]), i));
     }
-    for (auto item : binding_line_map) {
+    for (auto item : binding_line_map)
+    {
         auto line = split[item.second];
         int i = item.second;
-        for (int j = 0; j < program_paramater_count; j++) {
+        for (int j = 0; j < program_paramater_count; j++)
+        {
             slang::VariableLayoutReflection* paramater = programLayout->getParameterByIndex(j);
             if (paramater->getType()->getKind() == slang::TypeReflection::Kind::Resource) {
-                auto slangname = std::string(paramater->getName());
-                if (!map.contains(slangname)) {
-                    std::shared_ptr<UniformInfo> info = std::make_shared<UniformInfo>();
-                    info->slang_name = slangname;
-                    map.insert({slangname, info});
-                }
-                auto info = map[slangname];
-                uint bindingIndex = paramater->getBindingIndex();
-                if (line.contains(std::format("binding = {}", bindingIndex))) {
-                    std::cout << std::format("Found {} at {}, line {}", paramater->getName(), bindingIndex, i + 1) << std::endl;
-                    switch (paramater->getType()->getResourceShape())
-                    {
-                    case SLANG_BYTE_ADDRESS_BUFFER:
-                    case SLANG_RESOURCE_UNKNOWN:
-                    case SLANG_ACCELERATION_STRUCTURE:
-                    case SLANG_TEXTURE_SUBPASS:
-                        break;
-                    case SLANG_STRUCTURED_BUFFER:
-                    default:
-                        parseResourceUniform(info, split, paramater, binding_line_map);
-                        break;
-                    }
+            auto slangname = std::string(paramater->getName());
+            if (!map.contains(slangname))
+            {
+                std::shared_ptr<UniformInfo> info = std::make_shared<UniformInfo>();
+                info->slang_name = slangname;
+                map.insert({slangname, info});
+            }
+            auto info = map[slangname];
+            uint bindingIndex = paramater->getBindingIndex();
+                std::cout << std::format("Found {} at {}, line {}", paramater->getName(), bindingIndex, i + 1) << std::endl;
+                switch (paramater->getType()->getResourceShape())
+                {
+                case SLANG_BYTE_ADDRESS_BUFFER:
+                case SLANG_RESOURCE_UNKNOWN:
+                case SLANG_ACCELERATION_STRUCTURE:
+                case SLANG_TEXTURE_SUBPASS:
+                    break;
+                case SLANG_STRUCTURED_BUFFER:
+                default:
+                    parseResourceUniform(info, split, paramater, binding_line_map);
+                    break;
                 }
             }
         }
     }
+    // Unorthodox usage of a for loop, but whatever.
+    for (int i = 0; i < split.size(); i++)
+    {
+        auto line = split[i];
+        if (!line.contains("uniform block_GlobalParams_0")) continue;
+        i += 2; // Skip over "{" line
+        int uniform_index = 0;
+        while ( i < split.size() && !split[i].contains("}")) {
+            line = split[i];
+            auto info = std::make_shared<UniformInfo>();
+            auto varlayout = programLayout->getParameterByIndex(uniform_index);
+            auto name = varlayout->getVariable()->getName();
+            if (!line.contains(std::format(" {}_0", name))) {
+                break;
+            }
+            info->glsl_names.push_back(std::format("globalParams_0.{}_0", name));
+            info->slang_name = std::string(name);
+            std::cout << std::format(">> {}: {}\n", name, line);
+            uniform_index++;
+            i++;
+            map.insert({std::string(info->slang_name), info});
+        }
+
+        break;
+    }
     std::vector<UniformInfo> list;
-    for (auto& item : map) {
+    for (auto& item : map)
+    {
         list.push_back(*item.second);
     }
     return list;
@@ -265,7 +299,7 @@ SlangCompilerOutput SlangCompiler::getCompilerOutputFromModule(Slang::ComPtr<sla
         final_code << postprocessStageCode(stage_info.glsl, stage);
         final_code << "\n#endif\n";
     }
-    auto uniformMap = std::make_shared<std::vector<UniformInfo>>();
+    auto uniformMap = std::make_shared<std::map<std::string, UniformInfo>>();
     for (auto& stage : stageCodes) {
         auto linkedProgram = stage.linkedProgram;
         auto programLayout = linkedProgram->getLayout();
@@ -275,11 +309,11 @@ SlangCompilerOutput SlangCompiler::getCompilerOutputFromModule(Slang::ComPtr<sla
         thing << "BEGIN THING FOR \"" << love::graphics::ShaderStage::getConstant(stage.stage) << "\"\n";
         int count = stageUniformMap.size();
         for (int i = 0; i < count; i++) {
-            if (uniformMap->size() <= i) {
-                uniformMap->push_back(stageUniformMap[i]);
+            if (uniformMap->find(stageUniformMap[i].slang_name) == uniformMap->end()) {
+                uniformMap->insert({stageUniformMap[i].slang_name, stageUniformMap[i]});
             }
-            if (uniformMap->at(i).glsl_names.size() < stageUniformMap.at(i).glsl_names.size()) {
-                uniformMap->at(i).glsl_names = stageUniformMap.at(i).glsl_names;
+            if (uniformMap->find(stageUniformMap[i].slang_name)->second.glsl_names.size() < stageUniformMap.at(i).glsl_names.size()) {
+                uniformMap->find(stageUniformMap[i].slang_name)->second.glsl_names = stageUniformMap.at(i).glsl_names;
             }
             thing << std::format("- {}: {}", stageUniformMap[i].slang_name, stageUniformMap[i].glsl_names) << "\n";
         }
@@ -287,9 +321,13 @@ SlangCompilerOutput SlangCompiler::getCompilerOutputFromModule(Slang::ComPtr<sla
         thing << "END THING\n";
         std::cout << thing.str() << std::endl;
     }
-    for (int i = uniformMap->size() - 1; i >= 0; i--) {
-        if (uniformMap->at(i).glsl_names.size() == 0) {
-            uniformMap->erase(uniformMap->begin() + i);
+    auto uniformVector = std::make_shared<std::vector<UniformInfo>>();
+    for (auto elem: *uniformMap) {
+        uniformVector->push_back(elem.second);
+    }
+    for (int i = uniformVector->size() - 1; i >= 0; i--) {
+        if (uniformVector->at(i).glsl_names.size() == 0) {
+            uniformVector->erase(uniformVector->begin() + i);
             continue;
         }
     }
@@ -297,7 +335,7 @@ SlangCompilerOutput SlangCompiler::getCompilerOutputFromModule(Slang::ComPtr<sla
     return {
         .glsl = final_code.str(),
         .stages = stages,
-        .uniform_map = uniformMap,
+        .uniform_map = uniformVector,
     };
 }
 

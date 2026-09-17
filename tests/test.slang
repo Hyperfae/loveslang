@@ -8,6 +8,7 @@ void vertexMain() {
 }
 
 uniform highp float time;
+uniform highp float ampl;
 
 Sampler2D tex2;
 [Shader("pixel")]
@@ -18,7 +19,7 @@ void pixelMain() {
         uv.x += (sin((uv.y + time) * float.getPi() * 4)) / 4;
         uv.y += (sin(uv.x * float.getPi() * 4)) / 4;
         uv.y += (sin(iuv.x * 16)) / 8;
-        // uv = lerp(iuv, uv, 0.5);
+        uv = lerp(iuv, uv, ampl);
         return vtxcolor * tex2.Sample(uv) * float4(uv.x, (( uv.y) + uv.x) / 2, uv.y, 1);
     });
 }
