@@ -15,7 +15,7 @@ function testcommon.drawshader(shader, reflection)
     local time = 0.0
     function love.draw()
         love.graphics.setShader(shader)
-        if shader:hasUniform(reflection.time.name) then
+        if reflection.time and shader:hasUniform(reflection.time.name) then
             shader:send(reflection.time.name, time)
         end
         local sw, sh = love.graphics.getDimensions()

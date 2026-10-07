@@ -38,13 +38,13 @@ public:
     // Destroys the global session used by loveslang. Should only be called when you're 100% sure the program is about to end.
     static void destroyGlobalSession();
 protected:
-    virtual std::string postprocessStageCode(std::string_view inCode, love::graphics::ShaderStageType stage);
-private:
     struct StageInfo {
         std::string glsl;
         Slang::ComPtr<slang::IComponentType> linkedProgram;
         love::graphics::ShaderStageType stage;
     };
+    virtual std::string postprocessStageCode(StageInfo* stage_info, love::graphics::ShaderStageType stage);
+private:
     StageInfo getRawStageCode(slang::IModule* slangModule, slang::IEntryPoint* entryPoint);
     std::vector<UniformInfo> createUniformMap(StageInfo* stageinfo);
 

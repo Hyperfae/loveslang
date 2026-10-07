@@ -15,6 +15,7 @@ jit.off()
     print(love.timer.getTime() .. " - after compilation")
 
     love.graphics.newComputeShader(source)
+    print(source)
     local shader = love.graphics.newShader(source)
 
     print("")
@@ -26,7 +27,7 @@ jit.off()
             end
         end
     end
-    if shader:hasUniform(reflection.ampl.name) then
+    if reflection.ampl and shader:hasUniform(reflection.ampl.name) then
         shader:send(reflection.ampl.name, 0.5)
     end
     testcommon.drawshader(shader, reflection)

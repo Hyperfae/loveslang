@@ -1,5 +1,13 @@
 [__AttributeUsage(_AttributeTargets.Var)]
 internal struct love_NoExportAttribute {}
+
+// Specify the name of an `in` or `out` variable. For vertex inputs, this is the name of the mesh attribute.
+// For vertex outputs and pixel inputs, this is an internal name used to bind the two.
+[__AttributeUsage(_AttributeTargets.Var)]
+public struct love_AttributeNameAttribute {
+    string name;
+}
+
 namespace love {
     public float4 getConstantColor() {
         return getUniformPerDraw(10);

@@ -76,14 +76,50 @@ static std::vector<Slang::ComPtr<slang::IEntryPoint>> getEntryPoints(Slang::ComP
     return entrypoints;
 }
 
-std::string SlangCompiler::postprocessStageCode(std::string_view inCode, love::graphics::ShaderStageType stage) {
+static std::vector<std::string_view> split_str_view(std::string_view view, std::string_view delim) {
+    std::vector<std::string_view> output{};
+    auto split = std::views::split(view, delim);
+    for (auto line_raw : split) {
+        output.push_back(std::string_view(line_raw));
+    }
+    return output;
+}
+
+static std::map<int, int> createBindingMap(std::vector<std::string_view> lines, std::string_view keyword, std::regex cond_regex = std::regex("")) {
+    std::map<int, int> map{};
+    for (int i = 0; i < lines.size(); i++) {
+        std::string_view line = lines[i];
+        std::cout << std::format("{} - {}", i + 1, line) << std::endl;
+        std::smatch sm1;
+        std::string linestring{line};
+        if (i+1 >= lines.size() ) {
+            break;
+        }
+        std::string nextlinestring{lines[i+1]};
+        std::string regex_str = std::format("{} = (\\d+)", keyword);
+        if (!std::regex_search(nextlinestring, cond_regex)) {
+            continue;
+        }
+        if (!std::regex_search(linestring, sm1, std::regex(regex_str))) continue;
+        int binding = std::stoi(sm1[1]);
+        if (map.contains(binding)) {
+            map[binding] = i;
+        } else {
+            map.insert(std::pair(binding, i));
+        }
+    }
+    return map;
+};
+
+
+std::string SlangCompiler::postprocessStageCode(StageInfo* stage_info, love::graphics::ShaderStageType stage) {
     static std::array<const char *, love::graphics::ShaderStageType::SHADERSTAGE_MAX_ENUM> targetEntrypointNames {
         "vertexmain",
         "effect",
         "computemain"
     };
     
-    std::string code{inCode};
+    std::string code{stage_info->glsl};
     code = std::regex_replace(code, std::regex("^#version .*$", std::regex::multiline), std::string(""));
     code = std::regex_replace(code, std::regex("^layout\\(column_major\\) buffer;$", std::regex::multiline), std::string(""));
     code = std::regex_replace(code, std::regex("^layout\\(binding = .\\)$", std::regex::multiline), std::string(""));
@@ -91,7 +127,51 @@ std::string SlangCompiler::postprocessStageCode(std::string_view inCode, love::g
     // Fixup uniforms - currently required for LÖVE to accept our GLSL.
     code = std::regex_replace(code, std::regex("layout\\(std140\\) uniform block_GlobalParams_0(.|\\n|\\r)*globalParams_0;"), "uniform GlobalParams_0 globalParams_0;");
 
-    return code;
+    using std::operator""sv, std::operator""s;
+    std::vector<std::string_view> lines = split_str_view(code, "\n");
+    // lines.erase(lines.begin(), lines.begin() + 6);
+    std::map<int, int> in_line_map = createBindingMap(lines, "location", std::regex("in"));
+    std::map<int, int> out_line_map = createBindingMap(lines, "location", std::regex("out"));
+    std::cout << std::format("in_line_map: {}\n", in_line_map);
+    std::cout << std::format("out_line_map: {}\n", out_line_map);
+    std::stringstream outstream;
+    std::array<slang::ParameterCategory, 2> paramaterCategories{
+        slang::ParameterCategory::VaryingInput,
+        slang::ParameterCategory::VaryingOutput,
+    };
+    for (auto category : paramaterCategories){
+        auto programLayout = stage_info->linkedProgram->getLayout();
+        for (int i = 0; i < programLayout->getParameterCount(); i++) {
+            auto paramLayout = programLayout->getParameterByIndex(i);
+            if (paramLayout->getCategory() != category)
+                continue;
+            std::cout << std::format("Passed category test: {}", paramLayout->getName()) << std::endl;
+            auto attribute = paramLayout->getVariable()->findUserAttributeByName(globalSession, "love_AttributeName");
+            if (!attribute)
+                continue;
+            auto location = paramLayout->getOffset(category);
+            paramLayout->getOffset();
+            
+            std::smatch sm0;
+            std::string bind_name{};
+            {
+                size_t size;
+                const char* ptr = attribute->getArgumentValueString(0, &size);
+                bind_name = std::string(ptr, size);
+            }
+            std::string line{(lines[( category == slang::ParameterCategory::VaryingInput ? in_line_map : out_line_map)[location] + 1])};
+            if (!line.contains(paramLayout->getName())) {
+                continue;
+            }
+            std::regex_search(line, sm0, std::regex(("(in|out) \\w+ (.*);")));
+            if (sm0[2].length() == 0) {
+                continue;
+            }
+            outstream << std::format("#define {} {}", sm0[2].str(), bind_name) << "\n";
+        }
+    }
+    outstream << code;
+    return outstream.str();
 }
 
 static void assertSlangOK(SlangResult result, slang::IBlob* diagnosticsBlob) {
@@ -146,14 +226,6 @@ SlangCompiler::StageInfo SlangCompiler::getRawStageCode(slang::IModule* slangMod
     };
 }
 
-static std::vector<std::string_view> split_str_view(std::string_view view, std::string_view delim) {
-    std::vector<std::string_view> output{};
-    auto split = std::views::split(view, delim);
-    for (auto line_raw : split) {
-        output.push_back(std::string_view(line_raw));
-    }
-    return output;
-}
 
 static void parseResourceUniform(std::shared_ptr<UniformInfo>& info, std::vector<std::string_view>& lines, slang::VariableLayoutReflection* paramater, std::map<int, int>& binding_line_map)
 {
@@ -199,18 +271,7 @@ std::vector<UniformInfo> SlangCompiler::createUniformMap(StageInfo* stageinfo)
     auto programLayout = stageinfo->linkedProgram->getLayout();
     int program_paramater_count = programLayout->getParameterCount();
     std::vector<std::string_view> split = split_str_view(std::string_view(stageinfo->glsl), std::string_view("\n"));
-    std::map<int, int> binding_line_map{};
-    for (int i = 0; i < split.size(); i++) {
-        std::string_view line = split[i];
-        std::cout << std::format("{} - {}", i + 1, line) << std::endl;
-        if (!line.contains(std::string_view("binding ="))) {
-            continue;
-        } 
-        std::smatch sm1;
-        std::string linestring{line};
-        std::regex_search(linestring, sm1, std::regex(("binding = (\\d+)")));
-        binding_line_map.insert(std::pair(std::stoi(sm1[1]), i));
-    }
+    std::map<int, int> binding_line_map = createBindingMap(split, "binding");
     for (auto item : binding_line_map)
     {
         auto line = split[item.second];
@@ -296,7 +357,7 @@ SlangCompilerOutput SlangCompiler::getCompilerOutputFromModule(Slang::ComPtr<sla
         auto stage_info = getRawStageCode(module, entrypoinsByStage[stage_id].get());
         stage_info.stage = stage;
         stageCodes.push_back(stage_info);
-        final_code << postprocessStageCode(stage_info.glsl, stage);
+        final_code << postprocessStageCode(&stage_info, stage);
         final_code << "\n#endif\n";
     }
     auto uniformMap = std::make_shared<std::map<std::string, UniformInfo>>();
