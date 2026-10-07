@@ -16,6 +16,10 @@ struct UniformInfo {
     std::vector<std::string> glsl_names;
 };
 
+struct SlangCompilerOptions {
+    std::shared_ptr<std::vector<std::string>> search_paths;
+};
+
 struct SlangCompilerOutput {
     std::string glsl;
     std::bitset<love::graphics::ShaderStageType::SHADERSTAGE_MAX_ENUM> stages;
@@ -26,7 +30,7 @@ class SlangCompiler : public love::Object
 {
 public:
 	static love::Type type;
-	SlangCompiler();
+	SlangCompiler(SlangCompilerOptions* options);
 	virtual ~SlangCompiler();
 
     SlangCompilerOutput compileToGLSL(std::string_view moduleName);

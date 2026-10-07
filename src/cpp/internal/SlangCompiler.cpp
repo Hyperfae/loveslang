@@ -22,7 +22,7 @@ love::Type SlangCompiler::type("loveslang.SlangCompiler", &Object::type);
 std::once_flag SlangCompiler::globalSessionCreated;
 Slang::ComPtr<slang::IGlobalSession> SlangCompiler::globalSession;
 
-SlangCompiler::SlangCompiler() {
+SlangCompiler::SlangCompiler(SlangCompilerOptions* options) {
     ensureGlobalSession();
     slang::SessionDesc sessionDesc = {};
     slang::TargetDesc targetDesc[1]{};
@@ -38,6 +38,11 @@ SlangCompiler::SlangCompiler() {
     sessionDesc.preprocessorMacroCount = preprocessorMacroDesc.size();
     
     std::vector<const char*> search_paths{ "__loveslang_lib_internal" };
+    if (options->search_paths) {
+        for (auto& path : *options->search_paths) {
+            search_paths.push_back(path.c_str());
+        }
+    }
     sessionDesc.searchPaths = search_paths.data();
     sessionDesc.searchPathCount = search_paths.size();
 
@@ -89,7 +94,6 @@ static std::map<int, int> createBindingMap(std::vector<std::string_view> lines, 
     std::map<int, int> map{};
     for (int i = 0; i < lines.size(); i++) {
         std::string_view line = lines[i];
-        std::cout << std::format("{} - {}", i + 1, line) << std::endl;
         std::smatch sm1;
         std::string linestring{line};
         if (i+1 >= lines.size() ) {
@@ -132,8 +136,6 @@ std::string SlangCompiler::postprocessStageCode(StageInfo* stage_info, love::gra
     // lines.erase(lines.begin(), lines.begin() + 6);
     std::map<int, int> in_line_map = createBindingMap(lines, "location", std::regex("in"));
     std::map<int, int> out_line_map = createBindingMap(lines, "location", std::regex("out"));
-    std::cout << std::format("in_line_map: {}\n", in_line_map);
-    std::cout << std::format("out_line_map: {}\n", out_line_map);
     std::stringstream outstream;
     std::array<slang::ParameterCategory, 2> paramaterCategories{
         slang::ParameterCategory::VaryingInput,
@@ -145,7 +147,6 @@ std::string SlangCompiler::postprocessStageCode(StageInfo* stage_info, love::gra
             auto paramLayout = programLayout->getParameterByIndex(i);
             if (paramLayout->getCategory() != category)
                 continue;
-            std::cout << std::format("Passed category test: {}", paramLayout->getName()) << std::endl;
             auto attribute = paramLayout->getVariable()->findUserAttributeByName(globalSession, "love_AttributeName");
             if (!attribute)
                 continue;
@@ -289,7 +290,6 @@ std::vector<UniformInfo> SlangCompiler::createUniformMap(StageInfo* stageinfo)
             }
             auto info = map[slangname];
             uint bindingIndex = paramater->getBindingIndex();
-                std::cout << std::format("Found {} at {}, line {}", paramater->getName(), bindingIndex, i + 1) << std::endl;
                 switch (paramater->getType()->getResourceShape())
                 {
                 case SLANG_BYTE_ADDRESS_BUFFER:
@@ -322,7 +322,6 @@ std::vector<UniformInfo> SlangCompiler::createUniformMap(StageInfo* stageinfo)
             }
             info->glsl_names.push_back(std::format("globalParams_0.{}_0", name));
             info->slang_name = std::string(name);
-            std::cout << std::format(">> {}: {}\n", name, line);
             uniform_index++;
             i++;
             map.insert({std::string(info->slang_name), info});
@@ -367,7 +366,6 @@ SlangCompilerOutput SlangCompiler::getCompilerOutputFromModule(Slang::ComPtr<sla
         
         std::stringstream thing;
         auto stageUniformMap = createUniformMap(&stage);
-        thing << "BEGIN THING FOR \"" << love::graphics::ShaderStage::getConstant(stage.stage) << "\"\n";
         int count = stageUniformMap.size();
         for (int i = 0; i < count; i++) {
             if (uniformMap->find(stageUniformMap[i].slang_name) == uniformMap->end()) {
@@ -376,11 +374,7 @@ SlangCompilerOutput SlangCompiler::getCompilerOutputFromModule(Slang::ComPtr<sla
             if (uniformMap->find(stageUniformMap[i].slang_name)->second.glsl_names.size() < stageUniformMap.at(i).glsl_names.size()) {
                 uniformMap->find(stageUniformMap[i].slang_name)->second.glsl_names = stageUniformMap.at(i).glsl_names;
             }
-            thing << std::format("- {}: {}", stageUniformMap[i].slang_name, stageUniformMap[i].glsl_names) << "\n";
         }
-
-        thing << "END THING\n";
-        std::cout << thing.str() << std::endl;
     }
     auto uniformVector = std::make_shared<std::vector<UniformInfo>>();
     for (auto elem: *uniformMap) {
@@ -402,7 +396,6 @@ SlangCompilerOutput SlangCompiler::getCompilerOutputFromModule(Slang::ComPtr<sla
 
 SlangCompiler::~SlangCompiler() {
     session.setNull();
-    std::cout << "Destroying the session..." << std::endl;
 }
 
 static void createGlobalSession(Slang::ComPtr<slang::IGlobalSession>& ptr) {

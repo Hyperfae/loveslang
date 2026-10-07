@@ -1,4 +1,5 @@
 import love;
+import testlib;
 
 //[love_AttributeName("MyVarying")]
 //out float4 VaryingOut_MyVarying;
@@ -21,7 +22,7 @@ void pixelMain() {
     using namespace love::pixel;
     lambda((float4 vtxcolor, Sampler2D tex, float2 uv, float2 fragCoord) => {
         float2 iuv = uv;
-        uv.x += (sin((uv.y + time) * float.getPi() * 4)) / 4;
+        uv.x += (sin((uv.y + time) * float.getPi() * 4)) / testlib::getFour();
         uv.y += (sin(uv.x * float.getPi() * 4)) / 4;
         uv.y += (sin(iuv.x * 16)) / 8;
         uv = lerp(iuv, uv, ampl);
