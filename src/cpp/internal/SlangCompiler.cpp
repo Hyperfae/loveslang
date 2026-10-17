@@ -252,7 +252,9 @@ static void parseResourceUniform(std::shared_ptr<UniformInfo>& info, std::vector
         }
         // TODO: Find counter buffer
     }
-    case SLANG_RESOURCE_ACCESS_READ_WRITE: {
+    case SLANG_RESOURCE_ACCESS_READ_WRITE:
+    case SLANG_RESOURCE_ACCESS_READ:
+    {
         std::smatch sm1;
         std::string line{lines[current_line]};
         std::regex_search(line, sm1, std::regex(("buffer (.*) \\{")));
