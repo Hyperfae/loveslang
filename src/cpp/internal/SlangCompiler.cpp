@@ -347,6 +347,7 @@ SlangCompilerOutput SlangCompiler::getCompilerOutputFromModule(Slang::ComPtr<sla
         "COMPUTE"
     };
     std::vector<SlangCompiler::StageInfo> stageCodes;
+    final_code << "#pragma language glsl4\n";
     for (int stage_id = 0; stage_id < love::graphics::ShaderStageType::SHADERSTAGE_MAX_ENUM; stage_id++) {
         if (!entrypoinsByStage[stage_id])
             continue;
